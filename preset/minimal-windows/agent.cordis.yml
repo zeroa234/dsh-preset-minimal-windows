@@ -1,0 +1,57 @@
+# The `minimal-windows` agent preset: a fixed-prompt, three-tool coding-agent
+# composition for Windows. Same shape as the shipped `minimal`, but the
+# persistent-bash PTY stack (`dsh-terminal` + `dsh-terminal-bash`, hardcoded to
+# /bin/bash) is replaced by two fresh-process shell tools: `gitbash` (spawns
+# Git for Windows' bash.exe through the host `subprocess` seam, probing
+# well-known install locations; the plugin lives at ./lib/gitbash.js and
+# travels with this directory) and `pwsh` (the standard preset's Windows
+# shell, backed by the host's pwsh executor). No persistent shell: every call
+# runs a fresh process.
+#
+# The persona is the complete system prompt, so global identity, Web
+# orientation, tool guidance, and later assembly listeners cannot add prompt
+# text. Runtime context snapshots are suppressed for this preset, and the
+# model composes only `gitbash`, `pwsh`, and `str_replace_editor`. Context
+# compaction is absent.
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: You are a helpful software engineer assistant running on Windows. Run shell commands with the gitbash tool (Git Bash) or the pwsh tool (PowerShell); edit files with str_replace_editor.
+    complete: true
+    includeRuntimeContext: false
+
+# The Git Bash tool publishes no service, so it sits loose like tool-bash in
+# `standard`: it resolves the host `subprocess` and `shellEnv` services and
+# registers the `gitbash` tool into this agent's scoped catalog. Referenced by
+# a RELATIVE path so the plugin file travels with the preset directory and no
+# profile/bundle install is needed. Each call runs a fresh bash.exe, so shell
+# state does not persist between calls.
+- id: tool-gitbash
+  name: ./lib/gitbash.js
+
+# PowerShell twin: consumes the host `shell` service (the `pwsh-sandbox`
+# executor this deployment mounts on win32) and registers the `pwsh` tool plus
+# its own prompt section (which the complete persona suppresses). Also a fresh
+# process per call. Guarded to win32 because it hard-waits for a pwsh executor.
+- id: tool-pwsh
+  name: '@deepseek-ai/dsh-tool-pwsh'
+  disabled: !!js process.platform !== 'win32'
+
+# The bare local filesystem shadows the host's sandboxed provider only for this
+# preset. The editor shares that realm and requires absolute paths.
+- id: filesystem
+  name: cordis:group
+  group: true
+  isolate:
+    fs: true
+  config:
+    - id: fs-local
+      name: '@deepseek-ai/dsh-fs-local'
+      config:
+        cwd: !!js process.env.DSH_CWD ?? process.cwd()
+
+    - id: str-replace-editor
+      name: '@deepseek-ai/dsh-tool-str-replace-editor'
+      config:
+        maxOutputChars: 16000

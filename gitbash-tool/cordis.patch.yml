@@ -1,0 +1,6 @@
+# gitbash tool bundle patch: inserts the Git Bash execution tool into the profile roster.
+# The bundle is the official dsh plugin shape — install it with
+# `dsh plugin --profile <name> add <path-or-git-url>`.
+- insert:
+    - id: tool-gitbash
+      name: '@dsh-external/dsh-tool-gitbash'
